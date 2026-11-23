@@ -2,6 +2,9 @@ import os
 import hashlib
 import pandas as pd
 import pydicom
+import matplotlib
+matplotlib.use("Agg")  # Necesario para guardar gráficas al ejecutar como script .py
+import matplotlib.pyplot as plt
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
@@ -10,6 +13,7 @@ DATA_DIR = "/kaggle/input/competitions/rsna-pneumonia-detection-challenge"
 LABELS_PATH = os.path.join(DATA_DIR, "stage_2_train_labels.csv")
 IMG_DIR = os.path.join(DATA_DIR, "stage_2_train_images")
 HASH_PATH = "/kaggle/working/hashes.csv"
+FIG_DUP_PATH = "/kaggle/working/duplicados_visual.png"
 
 
 def hash_imagen(patient_id):
@@ -20,6 +24,43 @@ def hash_imagen(patient_id):
         return patient_id, hashlib.md5(arr.tobytes() + str(arr.shape).encode()).hexdigest()
     except Exception:
         return patient_id, None
+
+
+def visualizar_duplicados(dup, max_grupos=4):
+    """Muestra y guarda en PNG pares/grupos de imágenes con el mismo hash."""
+    grupos = list(dup.groupby("hash"))[:max_grupos]
+    n_filas = len(grupos)
+    n_cols = max(len(g) for _, g in grupos)
+
+    fig, axes = plt.subplots(n_filas, n_cols, figsize=(4.5 * n_cols, 4.5 * n_filas))
+    if n_filas == 1:
+        axes = [axes]
+
+    for fila_idx, (h, grupo) in enumerate(grupos):
+        for col_idx in range(n_cols):
+            ax = axes[fila_idx][col_idx] if n_cols > 1 else axes[fila_idx]
+            if col_idx < len(grupo):
+                row = grupo.iloc[col_idx]
+                pid = row["patientId"]
+                target = row["Target"]
+                estado = "CONSERVADA" if col_idx == 0 else "EXCLUIDA"
+                color_titulo = "green" if col_idx == 0 else "red"
+
+                img = pydicom.dcmread(os.path.join(IMG_DIR, f"{pid}.dcm")).pixel_array
+                ax.imshow(img, cmap="gray")
+                ax.set_title(
+                    f"[{estado}]\nID: {pid[:10]}...\nTarget: {target} | Hash: {h[:8]}",
+                    color=color_titulo,
+                    fontsize=9,
+                    fontweight="bold"
+                )
+            ax.axis("off")
+
+    plt.suptitle("Demostración de imágenes duplicadas (mismo hash MD5, distinto patientId)", fontsize=12)
+    plt.tight_layout()
+    plt.savefig(FIG_DUP_PATH, dpi=150)
+    plt.close()
+    print(f"Gráfica de duplicados guardada en: {FIG_DUP_PATH}")
 
 
 def main():
@@ -58,14 +99,22 @@ def main():
         contradictorios = dup.groupby("hash")["Target"].nunique()
         print(f"Grupos con etiquetas contradictorias: {(contradictorios > 1).sum()}")
         print(dup.head(20))
+        # Generar imagen visual de demostración
+        visualizar_duplicados(dup, max_grupos=4)
 
     # 4. Excluir copias duplicadas (se conserva la primera de cada grupo)
     excluir = dup[dup.duplicated("hash", keep="first")]["patientId"].tolist()
     df_limpio = df_patients[~df_patients["patientId"].isin(excluir)]
     print(f"\nExcluidas: {len(excluir)} imagen(es), quedan {len(df_limpio)} pacientes")
 
+    # 5. Verificación explícita tras la limpieza
+    hashes_limpios = df_limpio.merge(hashes, on="patientId")
+    dup_restantes = hashes_limpios["hash"].duplicated().sum()
+    print(f"VERIFICACIÓN: Hashes duplicados restantes en dataset limpio (debe ser 0): {dup_restantes}")
+
     # Guardar la tabla limpia para usarla en la partición
     df_limpio.to_csv("/kaggle/working/patients_clean.csv", index=False)
+
 
 if __name__ == "__main__":
     main()
