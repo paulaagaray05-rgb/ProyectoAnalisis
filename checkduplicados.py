@@ -59,6 +59,13 @@ def main():
         print(f"Grupos con etiquetas contradictorias: {(contradictorios > 1).sum()}")
         print(dup.head(20))
 
+    # 4. Excluir copias duplicadas (se conserva la primera de cada grupo)
+    excluir = dup[dup.duplicated("hash", keep="first")]["patientId"].tolist()
+    df_limpio = df_patients[~df_patients["patientId"].isin(excluir)]
+    print(f"\nExcluidas: {len(excluir)} imagen(es), quedan {len(df_limpio)} pacientes")
+
+    # Guardar la tabla limpia para usarla en la partición
+    df_limpio.to_csv("/kaggle/working/patients_clean.csv", index=False)
 
 if __name__ == "__main__":
     main()
