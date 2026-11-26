@@ -66,11 +66,13 @@ def main():
     neumonias = df[df["Target"] == 1].sample(2, random_state=SEED)
     muestras = pd.concat([sanos, neumonias]).reset_index(drop=True)
 
-    fig, axes = plt.subplots(1, 4, figsize=(13, 3.6))
+    fig, axes = plt.subplots(2, 4, figsize=(13, 6.8))
 
     for col, (_, row) in enumerate(muestras.iterrows()):
         dcm_path = os.path.join(IMG_DIR, f"{row['patientId']}.dcm")
-        img_224 = leer_y_redimensionar_224(dcm_path, size=IMG_SIZE, mostrar_original=(col == 0))
+        img_224, img_orig, shape_orig = leer_y_redimensionar_224(
+            dcm_path, size=IMG_SIZE, mostrar_original=(col == 0)
+        )
 
         t_scratch = normalizar_tensor_224(img_224, mode="scratch")
         t_transfer = normalizar_tensor_224(img_224, mode="transfer")
@@ -88,7 +90,7 @@ def main():
         axes[1, col].set_title(f"Redimensionada (224, 224) (T={int(row['Target'])})", fontsize=9)
         axes[1, col].axis("off")
 
-    plt.suptitle("Imágenes redimensionadas a 224x224 listas para normalizar", fontsize=11)
+    plt.suptitle("Comparación: radiografías originales vs. redimensionadas a 224x224", fontsize=11)
     plt.tight_layout()
     out_img = os.path.join(OUTPUT_DIR, "normalizacion_224.png")
     plt.savefig(out_img, dpi=150)
