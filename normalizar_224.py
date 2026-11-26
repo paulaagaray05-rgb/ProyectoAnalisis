@@ -3,7 +3,6 @@ import cv2
 import pydicom
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import torch
 from torchvision.transforms import v2
 
@@ -13,89 +12,50 @@ IMG_SIZE = 224
 DATA_DIR = "/kaggle/input/competitions/rsna-pneumonia-detection-challenge"
 LABELS_PATH = os.path.join(DATA_DIR, "stage_2_train_labels.csv")
 IMG_DIR = os.path.join(DATA_DIR, "stage_2_train_images")
-OUTPUT_DIR = "/kaggle/working"
 
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
 
-def leer_y_redimensionar_224(dcm_path, size=IMG_SIZE, mostrar_original=False):
-    """
-    Lee un DICOM, corrige MONOCHROME1 si hiciera falta, escala a uint8 [0, 255]
-    y redimensiona a (size, size). Devuelve un array 2D (H, W) uint8.
-    """
+def leer_y_redimensionar_224(dcm_path, size=IMG_SIZE):
+    """Lee un DICOM, corrige MONOCHROME1, pasa a uint8 [0, 255] y redimensiona a (size, size)."""
     dcm = pydicom.dcmread(dcm_path)
     img = dcm.pixel_array.astype(np.float32)
-
-    if mostrar_original:
-        print(f"Tamaño original DICOM: {img.shape} -> redimensionado a ({size}, {size})")
 
     if getattr(dcm, "PhotometricInterpretation", "") == "MONOCHROME1":
         img = np.max(img) - img
 
     img = (img - np.min(img)) / (np.max(img) - np.min(img) + 1e-8)
     img_u8 = (img * 255).astype(np.uint8)
-
     return cv2.resize(img_u8, (size, size), interpolation=cv2.INTER_AREA)
 
 
 def normalizar_tensor_224(img_224, mode="scratch"):
-    """
-    Convierte una imagen 2D (224, 224) uint8 a tensor de 3 canales (3, 224, 224)
-    y normaliza según el modo:
-      - 'scratch': rango [0.0, 1.0]
-      - 'transfer': media y std de ImageNet
-    """
+    """Pasa una imagen (224, 224) a tensor (3, 224, 224) y normaliza ('scratch' o 'transfer')."""
     img_3ch = np.stack([img_224, img_224, img_224], axis=0)
-    tensor = torch.from_numpy(img_3ch)
-    tensor = v2.ToDtype(torch.float32, scale=True)(tensor)
+    tensor = v2.ToDtype(torch.float32, scale=True)(torch.from_numpy(img_3ch))
 
     if mode == "scratch":
         return tensor
     if mode == "transfer":
         return v2.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)(tensor)
-
-    raise ValueError("El modo debe ser 'scratch' o 'transfer'.")
+    raise ValueError("Usa mode='scratch' o mode='transfer'.")
 
 
 def main():
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
     df = pd.read_csv(LABELS_PATH).drop_duplicates(subset=["patientId"]).reset_index(drop=True)
+    fila = df.iloc[0]
+    dcm_path = os.path.join(IMG_DIR, f"{fila['patientId']}.dcm")
 
-    sanos = df[df["Target"] == 0].sample(2, random_state=SEED)
-    neumonias = df[df["Target"] == 1].sample(2, random_state=SEED)
-    muestras = pd.concat([sanos, neumonias]).reset_index(drop=True)
+    orig_shape = pydicom.dcmread(dcm_path).pixel_array.shape
+    img_224 = leer_y_redimensionar_224(dcm_path)
+    t_scratch = normalizar_tensor_224(img_224, mode="scratch")
+    t_transfer = normalizar_tensor_224(img_224, mode="transfer")
 
-    fig, axes = plt.subplots(2, 4, figsize=(13, 6.8))
-
-    for col, (_, row) in enumerate(muestras.iterrows()):
-        dcm_path = os.path.join(IMG_DIR, f"{row['patientId']}.dcm")
-        img_224, img_orig, shape_orig = leer_y_redimensionar_224(
-            dcm_path, size=IMG_SIZE, mostrar_original=(col == 0)
-        )
-
-        t_scratch = normalizar_tensor_224(img_224, mode="scratch")
-        t_transfer = normalizar_tensor_224(img_224, mode="transfer")
-
-        if col == 0:
-            print(f"Forma tensor: {tuple(t_scratch.shape)}")
-            print(f"Normalización [0, 1] (scratch)    -> min={t_scratch.min():.3f}, max={t_scratch.max():.3f}")
-            print(f"Normalización ImageNet (transfer) -> min={t_transfer.min():.3f}, max={t_transfer.max():.3f}")
-
-        axes[0, col].imshow(img_orig, cmap="gray")
-        axes[0, col].set_title(f"Original {shape_orig} (T={int(row['Target'])})", fontsize=9)
-        axes[0, col].axis("off")
-
-        axes[1, col].imshow(img_224, cmap="gray")
-        axes[1, col].set_title(f"Redimensionada (224, 224) (T={int(row['Target'])})", fontsize=9)
-        axes[1, col].axis("off")
-
-    plt.suptitle("Comparación: radiografías originales vs. redimensionadas a 224x224", fontsize=11)
-    plt.tight_layout()
-    out_img = os.path.join(OUTPUT_DIR, "normalizacion_224.png")
-    plt.savefig(out_img, dpi=150)
-    plt.close()
-    print(f"Figura guardada en: {out_img}")
+    print("Original DICOM:", orig_shape, "-> Redimensionada:", img_224.shape)
+    print("Tensor final:", tuple(t_scratch.shape))
+    print(f"Normalizado [0, 1]:   min={t_scratch.min():.3f}, max={t_scratch.max():.3f}")
+    print(f"Normalizado ImageNet: min={t_transfer.min():.3f}, max={t_transfer.max():.3f}")
 
 
 if __name__ == "__main__":
