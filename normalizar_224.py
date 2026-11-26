@@ -19,13 +19,16 @@ IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
 
-def leer_y_redimensionar_224(dcm_path, size=IMG_SIZE):
+def leer_y_redimensionar_224(dcm_path, size=IMG_SIZE, mostrar_original=False):
     """
     Lee un DICOM, corrige MONOCHROME1 si hiciera falta, escala a uint8 [0, 255]
     y redimensiona a (size, size). Devuelve un array 2D (H, W) uint8.
     """
     dcm = pydicom.dcmread(dcm_path)
     img = dcm.pixel_array.astype(np.float32)
+
+    if mostrar_original:
+        print(f"Tamaño original DICOM: {img.shape} -> redimensionado a ({size}, {size})")
 
     if getattr(dcm, "PhotometricInterpretation", "") == "MONOCHROME1":
         img = np.max(img) - img
@@ -63,11 +66,13 @@ def main():
     neumonias = df[df["Target"] == 1].sample(2, random_state=SEED)
     muestras = pd.concat([sanos, neumonias]).reset_index(drop=True)
 
-    fig, axes = plt.subplots(1, 4, figsize=(13, 3.6))
+    fig, axes = plt.subplots(2, 4, figsize=(13, 6.8))
 
     for col, (_, row) in enumerate(muestras.iterrows()):
         dcm_path = os.path.join(IMG_DIR, f"{row['patientId']}.dcm")
-        img_224 = leer_y_redimensionar_224(dcm_path, size=IMG_SIZE)
+        img_224, img_orig, shape_orig = leer_y_redimensionar_224(
+            dcm_path, size=IMG_SIZE, mostrar_original=(col == 0)
+        )
 
         t_scratch = normalizar_tensor_224(img_224, mode="scratch")
         t_transfer = normalizar_tensor_224(img_224, mode="transfer")
@@ -77,11 +82,15 @@ def main():
             print(f"Normalización [0, 1] (scratch)    -> min={t_scratch.min():.3f}, max={t_scratch.max():.3f}")
             print(f"Normalización ImageNet (transfer) -> min={t_transfer.min():.3f}, max={t_transfer.max():.3f}")
 
-        axes[col].imshow(img_224, cmap="gray")
-        axes[col].set_title(f"224x224 (Target={int(row['Target'])})", fontsize=9)
-        axes[col].axis("off")
+        axes[0, col].imshow(img_orig, cmap="gray")
+        axes[0, col].set_title(f"Original {shape_orig} (T={int(row['Target'])})", fontsize=9)
+        axes[0, col].axis("off")
 
-    plt.suptitle("Imágenes redimensionadas a 224x224 listas para normalizar", fontsize=11)
+        axes[1, col].imshow(img_224, cmap="gray")
+        axes[1, col].set_title(f"Redimensionada (224, 224) (T={int(row['Target'])})", fontsize=9)
+        axes[1, col].axis("off")
+
+    plt.suptitle("Comparación: radiografías originales vs. redimensionadas a 224x224", fontsize=11)
     plt.tight_layout()
     out_img = os.path.join(OUTPUT_DIR, "normalizacion_224.png")
     plt.savefig(out_img, dpi=150)
