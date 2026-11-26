@@ -80,9 +80,13 @@ def main():
             print(f"Normalización [0, 1] (scratch)    -> min={t_scratch.min():.3f}, max={t_scratch.max():.3f}")
             print(f"Normalización ImageNet (transfer) -> min={t_transfer.min():.3f}, max={t_transfer.max():.3f}")
 
-        axes[col].imshow(img_224, cmap="gray")
-        axes[col].set_title(f"224x224 (Target={int(row['Target'])})", fontsize=9)
-        axes[col].axis("off")
+        axes[0, col].imshow(img_orig, cmap="gray")
+        axes[0, col].set_title(f"Original {shape_orig} (T={int(row['Target'])})", fontsize=9)
+        axes[0, col].axis("off")
+
+        axes[1, col].imshow(img_224, cmap="gray")
+        axes[1, col].set_title(f"Redimensionada (224, 224) (T={int(row['Target'])})", fontsize=9)
+        axes[1, col].axis("off")
 
     plt.suptitle("Imágenes redimensionadas a 224x224 listas para normalizar", fontsize=11)
     plt.tight_layout()
