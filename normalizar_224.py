@@ -68,6 +68,12 @@ def main():
 
     fig, axes = plt.subplots(2, 4, figsize=(13, 6.5))
 
+    sanos = df[df["Target"] == 0].sample(2, random_state=SEED)
+    neumonias = df[df["Target"] == 1].sample(2, random_state=SEED)
+    muestras = pd.concat([sanos, neumonias]).reset_index(drop=True)
+
+    fig, axes = plt.subplots(2, 4, figsize=(13, 6.5))
+
     for col, (_, row) in enumerate(muestras.iterrows()):
         dcm_path = os.path.join(IMG_DIR, f"{row['patientId']}.dcm")
         img_224 = leer_y_redimensionar_224(dcm_path, size=IMG_SIZE, use_clahe=False)
