@@ -19,13 +19,16 @@ IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
 
-def leer_y_redimensionar_224(dcm_path, size=IMG_SIZE):
+def leer_y_redimensionar_224(dcm_path, size=IMG_SIZE, mostrar_original=False):
     """
     Lee un DICOM, corrige MONOCHROME1 si hiciera falta, escala a uint8 [0, 255]
     y redimensiona a (size, size). Devuelve un array 2D (H, W) uint8.
     """
     dcm = pydicom.dcmread(dcm_path)
     img = dcm.pixel_array.astype(np.float32)
+
+    if mostrar_original:
+        print(f"Tamaño original DICOM: {img.shape} -> redimensionado a ({size}, {size})")
 
     if getattr(dcm, "PhotometricInterpretation", "") == "MONOCHROME1":
         img = np.max(img) - img
@@ -67,7 +70,7 @@ def main():
 
     for col, (_, row) in enumerate(muestras.iterrows()):
         dcm_path = os.path.join(IMG_DIR, f"{row['patientId']}.dcm")
-        img_224 = leer_y_redimensionar_224(dcm_path, size=IMG_SIZE)
+        img_224 = leer_y_redimensionar_224(dcm_path, size=IMG_SIZE, mostrar_original=(col == 0))
 
         t_scratch = normalizar_tensor_224(img_224, mode="scratch")
         t_transfer = normalizar_tensor_224(img_224, mode="transfer")
