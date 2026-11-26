@@ -74,7 +74,7 @@ print(classes["class"].value_counts())
 
 
 
-!pip install -q pydicom
+#!pip install -q pydicom
 
 import pydicom
 import matplotlib.pyplot as plt
