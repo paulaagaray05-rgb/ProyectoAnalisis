@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pydicom
 import matplotlib
-matplotlib.use("Agg")  # Quita esta línea si lo ejecutas directamente en celdas de notebook
+matplotlib.use("Agg")  # Quita esta línea si lo ejecutas directamente en celdas de notebook2
 import matplotlib.pyplot as plt
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
@@ -165,3 +165,4 @@ else:
         plt.savefig(out_img, dpi=140)
         plt.close()
         print(f"Guardada cuadrícula de revisión: {out_img}")
+
