@@ -19,7 +19,7 @@ IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
 
-def leer_y_redimensionar_224(dcm_path, size=IMG_SIZE, use_clahe=False):
+def leer_y_redimensionar_224(dcm_path, size=IMG_SIZE):
     """
     Lee un DICOM, corrige MONOCHROME1 si hiciera falta, escala a uint8 [0, 255]
     y redimensiona a (size, size). Devuelve un array 2D (H, W) uint8.
@@ -33,13 +33,7 @@ def leer_y_redimensionar_224(dcm_path, size=IMG_SIZE, use_clahe=False):
     img = (img - np.min(img)) / (np.max(img) - np.min(img) + 1e-8)
     img_u8 = (img * 255).astype(np.uint8)
 
-    img_224 = cv2.resize(img_u8, (size, size), interpolation=cv2.INTER_AREA)
-
-    if use_clahe:
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        img_224 = clahe.apply(img_224)
-
-    return img_224
+    return cv2.resize(img_u8, (size, size), interpolation=cv2.INTER_AREA)
 
 
 def normalizar_tensor_224(img_224, mode="scratch"):
@@ -64,38 +58,30 @@ def normalizar_tensor_224(img_224, mode="scratch"):
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     df = pd.read_csv(LABELS_PATH).drop_duplicates(subset=["patientId"]).reset_index(drop=True)
-    muestras = df.sample(4, random_state=SEED).reset_index(drop=True)
-
-    fig, axes = plt.subplots(2, 4, figsize=(13, 6.5))
 
     sanos = df[df["Target"] == 0].sample(2, random_state=SEED)
     neumonias = df[df["Target"] == 1].sample(2, random_state=SEED)
     muestras = pd.concat([sanos, neumonias]).reset_index(drop=True)
 
-    fig, axes = plt.subplots(2, 4, figsize=(13, 6.5))
+    fig, axes = plt.subplots(1, 4, figsize=(13, 3.6))
 
     for col, (_, row) in enumerate(muestras.iterrows()):
         dcm_path = os.path.join(IMG_DIR, f"{row['patientId']}.dcm")
-        img_224 = leer_y_redimensionar_224(dcm_path, size=IMG_SIZE, use_clahe=False)
-        img_224_clahe = leer_y_redimensionar_224(dcm_path, size=IMG_SIZE, use_clahe=True)
+        img_224 = leer_y_redimensionar_224(dcm_path, size=IMG_SIZE)
 
         t_scratch = normalizar_tensor_224(img_224, mode="scratch")
-        t_transfer = normalizar_tensor_224(img_224_clahe, mode="transfer")
+        t_transfer = normalizar_tensor_224(img_224, mode="transfer")
 
         if col == 0:
             print(f"Forma tensor: {tuple(t_scratch.shape)}")
-            print(f"Normalización [0, 1] (scratch)   -> min={t_scratch.min():.3f}, max={t_scratch.max():.3f}")
+            print(f"Normalización [0, 1] (scratch)    -> min={t_scratch.min():.3f}, max={t_scratch.max():.3f}")
             print(f"Normalización ImageNet (transfer) -> min={t_transfer.min():.3f}, max={t_transfer.max():.3f}")
 
-        axes[0, col].imshow(img_224, cmap="gray")
-        axes[0, col].set_title(f"224x224 sin CLAHE (Target={int(row['Target'])})", fontsize=9)
-        axes[0, col].axis("off")
+        axes[col].imshow(img_224, cmap="gray")
+        axes[col].set_title(f"224x224 (Target={int(row['Target'])})", fontsize=9)
+        axes[col].axis("off")
 
-        axes[1, col].imshow(img_224_clahe, cmap="gray")
-        axes[1, col].set_title(f"224x224 con CLAHE (Target={int(row['Target'])})", fontsize=9)
-        axes[1, col].axis("off")
-
-    plt.suptitle("Comprobación de redimensionado a 224x224 y CLAHE", fontsize=11)
+    plt.suptitle("Imágenes redimensionadas a 224x224 listas para normalizar", fontsize=11)
     plt.tight_layout()
     out_img = os.path.join(OUTPUT_DIR, "normalizacion_224.png")
     plt.savefig(out_img, dpi=150)
